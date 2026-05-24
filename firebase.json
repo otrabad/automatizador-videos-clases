@@ -1,0 +1,19 @@
+{
+  "hosting": {
+    "public": "public_empty",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "automatizador-clases",
+          "region": "us-central1"
+        }
+      }
+    ]
+  }
+}
