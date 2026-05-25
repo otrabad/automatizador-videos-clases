@@ -10,12 +10,36 @@ from google import genai
 from google.genai.errors import APIError
 from moviepy import ImageClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
 
-# Nombre de la carpeta temporal para guardar archivos intermedios
-TEMP_DIR = "temp_assets"
+# Directorio del script y carpeta temporal para guardar archivos intermedios
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMP_DIR = os.path.join(SCRIPT_DIR, "temp_assets")
+
+def obtener_ruta_absoluta(ruta):
+    """Devuelve la ruta absoluta si ya lo es, o la resuelve relativa al directorio del script."""
+    if not ruta:
+        return ""
+    if os.path.isabs(ruta):
+        return ruta
+    return os.path.abspath(os.path.join(SCRIPT_DIR, ruta))
+
+def run_async(coro):
+    """Ejecuta una corrutina de forma síncrona, manejando si ya hay un bucle de eventos corriendo."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(asyncio.run, coro)
+            return future.result()
+    else:
+        return asyncio.run(coro)
 
 def cargar_configuracion():
     """Carga la configuración desde config.json o usa valores por defecto."""
-    config_path = "config.json"
+    config_path = os.path.join(SCRIPT_DIR, "config.json")
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -264,7 +288,7 @@ def ejecutar_proceso_automatizacion(pdf_path, guion_path, video_salida, voz, opt
     if callback_progreso:
         callback_progreso("Generando locuciones con voz neural...", 0.5)
         
-    asyncio.run(generar_todos_los_audios(
+    run_async(generar_todos_los_audios(
         guion_por_slide, 
         voz, 
         optimizar_ia,
@@ -290,10 +314,14 @@ def main():
     
     config = cargar_configuracion()
     
+    pdf_entrada = obtener_ruta_absoluta(config.get('pdf_entrada', 'diapositivas.pdf'))
+    guion_entrada = obtener_ruta_absoluta(config.get('guion_entrada', 'guion.txt'))
+    video_salida = obtener_ruta_absoluta(config.get('video_salida', 'clase_final.mp4'))
+    
     # Imprimir configuración
-    print(f"[*] Archivo PDF: {config['pdf_entrada']}")
-    print(f"[*] Archivo Guion: {config['guion_entrada']}")
-    print(f"[*] Video Salida: {config['video_salida']}")
+    print(f"[*] Archivo PDF: {pdf_entrada}")
+    print(f"[*] Archivo Guion: {guion_entrada}")
+    print(f"[*] Video Salida: {video_salida}")
     print(f"[*] Voz seleccionada: {config['voz']}")
     print(f"[*] Optimización por Gemini IA: {'SÍ' if config['optimizar_con_gemini'] else 'NO'}")
     print("-"*60)
@@ -302,13 +330,13 @@ def main():
     limpiar_carpeta_temporal()
     
     # 1. Extraer imágenes del PDF
-    total_paginas = extraer_diapositivas_pdf(config['pdf_entrada'])
+    total_paginas = extraer_diapositivas_pdf(pdf_entrada)
     
     # 2. Procesar el archivo de guion
-    guion_por_slide = procesar_guion_texto(config['guion_entrada'], total_paginas)
+    guion_por_slide = procesar_guion_texto(guion_entrada, total_paginas)
     
     # 3. Generar las locuciones de voz (TTS)
-    asyncio.run(generar_todos_los_audios(
+    run_async(generar_todos_los_audios(
         guion_por_slide, 
         config['voz'], 
         config['optimizar_con_gemini'],
@@ -316,7 +344,7 @@ def main():
     ))
     
     # 4. Ensamblar todo en el MP4 final
-    ensamblar_video_final(total_paginas, config['video_salida'])
+    ensamblar_video_final(total_paginas, video_salida)
     
     # 5. Limpieza final (Opcional)
     # Si quieres conservar los archivos temporales para depurar, comenta la línea de abajo
