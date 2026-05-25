@@ -247,8 +247,9 @@ def ensamblar_video_final(total_slides, video_salida):
     # Exportar el video final con configuraciones estándar compatibles con Moodle
     video_final.write_videofile(
         video_salida, 
-        fps=24, 
+        fps=2, 
         codec="libx264", 
+        preset="ultrafast",
         audio_codec="aac",
         temp_audiofile=os.path.join(TEMP_DIR, "temp_audio_final.m4a"),
         remove_temp=True
