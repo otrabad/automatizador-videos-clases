@@ -209,6 +209,48 @@ api_key_input = st.text_input(
 if api_key_input:
     st.session_state.api_key = api_key_input
 
+# --- Vista Previa en tiempo real de la firma ---
+if pdf_file and firma_docente:
+    st.markdown("---")
+    st.subheader("🖼️ Vista Previa en Tiempo Real (Página 1)")
+    with st.spinner("Generando vista previa interactiva..."):
+        try:
+            # Guardar el PDF de forma temporal para extraer la primera página
+            import tempfile
+            with tempfile.TemporaryDirectory() as preview_temp_dir:
+                preview_pdf_path = os.path.join(preview_temp_dir, "preview_in.pdf")
+                with open(preview_pdf_path, "wb") as f:
+                    f.write(pdf_file.getvalue())
+                    
+                # Extraer página 1 usando PyMuPDF (fitz)
+                doc = fitz.open(preview_pdf_path)
+                if len(doc) > 0:
+                    pagina = doc[0]
+                    pix = pagina.get_pixmap(dpi=120)  # DPI ligeramente bajo para carga ultrarrápida
+                    preview_img_path = os.path.join(preview_temp_dir, "preview_slide.png")
+                    pix.save(preview_img_path)
+                    
+                    # Importar la función del automatizador
+                    from automatizador import aplicar_firma_a_slide
+                    
+                    # Aplicar la firma sobre la primera página con los valores actuales de los sliders
+                    aplicar_firma_a_slide(
+                        preview_img_path, 
+                        texto_firma=firma_docente, 
+                        posicion=posicion_firma, 
+                        font_size=font_size, 
+                        padding=padding
+                    )
+                    
+                    # Mostrar en Streamlit
+                    st.image(
+                        preview_img_path, 
+                        caption="Vista previa interactiva de la primera diapositiva. ¡Ajustá los controles deslizantes para ver los cambios!", 
+                        use_column_width=True
+                    )
+        except Exception as e:
+            st.error(f"No se pudo generar la vista previa: {e}")
+
 # --- Paso 4: Generacion ---
 st.subheader("🚀 3. Generar Video")
 

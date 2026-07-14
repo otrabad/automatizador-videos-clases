@@ -1,5 +1,5 @@
 # Usar una imagen base oficial de Python
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Evitar la escritura de archivos .pyc en disco y asegurar salida de log inmediata
 ENV PYTHONDONTWRITEBYTECODE=1

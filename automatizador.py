@@ -78,10 +78,8 @@ def aplicar_firma_a_slide(imagen_path, texto_firma="Dr. Omar Trabadelo", posicio
         slide = Image.open(imagen_path)
         W, H = slide.size
         
-        font_path = '/System/Library/Fonts/Supplemental/Arial.ttf'
-        if not os.path.exists(font_path):
-            font_path = '/Library/Fonts/Arial.ttf' # Fallback
-            
+        font_path = os.path.join(SCRIPT_DIR, "Arial.ttf")
+        
         if os.path.exists(font_path):
             font = ImageFont.truetype(font_path, font_size)
         else:
