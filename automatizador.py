@@ -71,7 +71,7 @@ def limpiar_carpeta_temporal():
 # Paso 1: Extraccion de diapositivas del PDF
 # ---------------------------------------------------------------------------
 
-def aplicar_firma_a_slide(imagen_path, texto_firma="Dr. Omar Trabadelo", posicion="derecha"):
+def aplicar_firma_a_slide(imagen_path, texto_firma="Dr. Omar Trabadelo", posicion="derecha", font_size=36, padding=30):
     """Dibuja de forma local un cuadro negro con la firma del docente en el slide PNG."""
     from PIL import Image, ImageDraw, ImageFont
     try:
@@ -82,9 +82,6 @@ def aplicar_firma_a_slide(imagen_path, texto_firma="Dr. Omar Trabadelo", posicio
         if not os.path.exists(font_path):
             font_path = '/Library/Fonts/Arial.ttf' # Fallback
             
-        font_size = 32
-        padding = 25
-        
         if os.path.exists(font_path):
             font = ImageFont.truetype(font_path, font_size)
         else:
@@ -123,7 +120,7 @@ def aplicar_firma_a_slide(imagen_path, texto_firma="Dr. Omar Trabadelo", posicio
     except Exception as e:
         print(f"    [!] Error al estampar firma en diapositiva: {e}")
 
-def extraer_diapositivas_pdf(pdf_path, firma_docente=None, posicion_firma="derecha"):
+def extraer_diapositivas_pdf(pdf_path, firma_docente=None, posicion_firma="derecha", font_size=36, padding=30):
     """Convierte las paginas de un PDF en imagenes PNG individuales."""
     print(f"[*] Abriendo presentacion PDF: {pdf_path}")
     if not os.path.exists(pdf_path):
@@ -137,7 +134,7 @@ def extraer_diapositivas_pdf(pdf_path, firma_docente=None, posicion_firma="derec
         imagen_path = os.path.join(TEMP_DIR, f"slide_{i+1:03d}.png")
         pix.save(imagen_path)
         if firma_docente:
-            aplicar_firma_a_slide(imagen_path, firma_docente, posicion_firma)
+            aplicar_firma_a_slide(imagen_path, firma_docente, posicion_firma, font_size, padding)
         print(f"    -> Guardada diapositiva {i+1}/{total_paginas}")
     return total_paginas
 
@@ -424,7 +421,8 @@ def ejecutar_proceso_automatizacion(
     pdf_path, guion_path, video_salida, voz,
     optimizar_ia, modelo_gemini="gemini-2.5-flash",
     api_key=None, callback_progreso=None,
-    firma_docente=None, posicion_firma="derecha"
+    firma_docente=None, posicion_firma="derecha",
+    font_size=36, padding=30
 ):
     """
     Ejecuta el flujo completo de automatizacion de video.
@@ -437,7 +435,7 @@ def ejecutar_proceso_automatizacion(
 
     if callback_progreso:
         callback_progreso("Extrayendo diapositivas del PDF...", 0.05)
-    total_paginas = extraer_diapositivas_pdf(pdf_path, firma_docente, posicion_firma)
+    total_paginas = extraer_diapositivas_pdf(pdf_path, firma_docente, posicion_firma, font_size, padding)
 
     if callback_progreso:
         callback_progreso("Procesando guion de voz...", 0.20)
@@ -487,6 +485,8 @@ def main():
     modelo_gemini = config.get("modelo_gemini",        "gemini-2.5-flash")
     firma_docente = config.get("firma_docente",        "")
     posicion_firma = config.get("posicion_firma",      "derecha")
+    font_size     = config.get("font_size",            36)
+    padding       = config.get("padding",              30)
 
     print(f"[*] PDF de entrada  : {pdf_entrada}")
     print(f"[*] Guion de entrada: {guion_entrada}")
@@ -494,7 +494,7 @@ def main():
     print(f"[*] Voz seleccionada: {voz}")
     print(f"[*] Optimizacion IA : {'SI' if optimizar_ia else 'NO'}")
     if firma_docente:
-        print(f"[*] Firma Docente   : {firma_docente} ({posicion_firma})")
+        print(f"[*] Firma Docente   : {firma_docente} ({posicion_firma}, letra: {font_size}, padding: {padding})")
     if optimizar_ia and not os.environ.get("GEMINI_API_KEY"):
         print("\n[!] ADVERTENCIA: GEMINI_API_KEY no esta definida.")
         print("    Generala en: https://aistudio.google.com/app/apikey")
@@ -503,7 +503,7 @@ def main():
     print("-" * 60)
 
     limpiar_carpeta_temporal()
-    total_paginas   = extraer_diapositivas_pdf(pdf_entrada, firma_docente, posicion_firma)
+    total_paginas   = extraer_diapositivas_pdf(pdf_entrada, firma_docente, posicion_firma, font_size, padding)
     guion_por_slide = procesar_guion_texto(guion_entrada, total_paginas)
 
     reporte = validar_coincidencia(total_paginas, guion_por_slide)

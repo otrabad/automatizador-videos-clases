@@ -191,6 +191,14 @@ with col_firma:
         options=["Derecha", "Izquierda"],
         index=0
     ).lower()
+    
+    # Deslizadores interactivos para regular la cobertura en pantalla
+    st.markdown("<small style='color: #ff4b4b; font-weight: bold;'>📐 Ajustes de Cobertura:</small>", unsafe_allow_html=True)
+    sub_col1, sub_col2 = st.columns(2)
+    with sub_col1:
+        font_size = st.slider("Letra:", min_value=20, max_value=80, value=36, step=2, help="Aumenta el tamaño de la tipografía.")
+    with sub_col2:
+        padding = st.slider("Grosor (Padding):", min_value=10, max_value=120, value=30, step=2, help="Aumenta el margen negro alrededor para cubrir logotipos gigantes.")
 
 api_key_input = st.text_input(
     "Clave API de Gemini (opcional — mejora la lectura de abreviaturas médicas):",
@@ -243,7 +251,9 @@ if st.button("🎬 Generar Video MP4 de la Clase", disabled=boton_deshabilitado)
             api_key=st.session_state.api_key or None,
             callback_progreso=actualizar_progreso,
             firma_docente=firma_docente if firma_docente else None,
-            posicion_firma=posicion_firma
+            posicion_firma=posicion_firma,
+            font_size=font_size,
+            padding=padding
         )
 
         st.success("🎉 Video compilado con éxito!")
