@@ -253,7 +253,7 @@ if pdf_file and firma_docente:
                     st.image(
                         preview_img_path, 
                         caption="Vista previa interactiva de la primera diapositiva. ¡Ajustá los controles deslizantes para ver los cambios!", 
-                        use_column_width=True
+                        use_container_width=True
                     )
         except Exception as e:
             st.error(f"No se pudo generar la vista previa: {e}")
