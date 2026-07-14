@@ -233,6 +233,13 @@ if pdf_file and firma_docente:
                     # Importar la función del automatizador
                     from automatizador import aplicar_firma_a_slide
                     
+                    # Verificación de fuente para depuración en la interfaz
+                    font_path_check = os.path.join(WORK_DIR, "Arial.ttf")
+                    if os.path.exists(font_path_check):
+                        st.success(f"🔍 Fuente Arial.ttf detectada en el servidor (Tamaño de letra: {font_size}px, Grosor: {padding}px)")
+                    else:
+                        st.error(f"⚠️ ¡Atención! No se encontró Arial.ttf en {font_path_check}. La firma usará la fuente por defecto (no escalable).")
+                    
                     # Aplicar la firma sobre la primera página con los valores actuales de los sliders
                     aplicar_firma_a_slide(
                         preview_img_path, 

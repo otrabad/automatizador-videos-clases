@@ -82,8 +82,10 @@ def aplicar_firma_a_slide(imagen_path, texto_firma="Dr. Omar Trabadelo", posicio
         
         if os.path.exists(font_path):
             font = ImageFont.truetype(font_path, font_size)
+            print(f"    [+] Fuente cargada con éxito desde {font_path} con tamaño {font_size}", flush=True)
         else:
             font = ImageFont.load_default()
+            print(f"    [!] No se encontró la fuente en {font_path}. Usando fuente por defecto.", flush=True)
             
         # Calcular tamaño del texto de forma segura
         draw_dummy = ImageDraw.Draw(Image.new('RGB', (1, 1)))
