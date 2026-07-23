@@ -8,3 +8,7 @@ temp_assets/
 !requirements.txt
 config.json
 crear_pdf_prueba.py
+__pycache__/
+*.pyc
+.firebase/
+firebase-debug.log
