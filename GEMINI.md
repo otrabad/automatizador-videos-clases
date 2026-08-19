@@ -77,9 +77,36 @@ Esto silencia por completo el warning y asegura la compatibilidad a largo plazo 
 
 ---
 
+## 🌟 Versión 2.0 (Agosto 2026): Aislamiento Concurrente, Editor Web e IA Avanzada
+
+En esta actualización se incorporan 6 mejoras clave para convertir la herramienta en una solución lista para producción multiusuario:
+
+### 1. Aislamiento de Sesiones Multiusuario (Concurrencia)
+* Cada ejecución utiliza un directorio temporal independiente mediante `tempfile.TemporaryDirectory()`.
+* Evita colisiones cuando múltiples docentes generan videos de clase en la nube al mismo tiempo.
+
+### 2. Editor e Inspección Interactiva de Guion (Web UI)
+* Se agregó un `st.text_area` editable en `app.py` que permite modificar las marcas `[Slide X]` o ajustar frases en tiempo real sin necesidad de volver a subir el archivo `.txt`.
+
+### 3. Control Fino de Ritmo de Voz y Pausas Inter-Diapositivas
+* **Ritmo (`rate`):** Opciones de locución desde Lento (`-10%`), Normal (`+0%`), Rápido (`+10%`) hasta Muy rápido (`+20%`) usando Edge TTS.
+* **Pausas:** Silencios configurables entre diapositivas (`0.0 s`, `0.5 s`, `1.0 s`, `1.5 s`) para transiciones fluidas.
+
+### 4. Personalización del Estilo/Tono de la IA (Gemini 2.5 Flash)
+* Tres perfiles de optimización con Gemini:
+  * **Médico / Académico Formal:** Expande abreviaturas técnicas (`ABO/Rh` -> `A B O y R H`, `pH` -> `pe hache`) manteniendo rigor académico.
+  * **Didáctico / Divulgativo:** Clarifica oraciones y dinamiza el texto para estudiantes.
+  * **Conciso / Breve:** Sintetiza el guion manteniendo las ideas principales.
+
+### 5. Resiliencia y Reintentos Automáticos (*Retry Logic*)
+* Reintentos automáticos (3 intentos con espera exponencial de 2s, 4s, 8s) en las invocaciones a la API de Gemini 2.5 Flash y al motor de voz `edge-tts` ante microcortes de red.
+
+---
+
 ## Pautas para Futuras Modificaciones
 
 Si en el futuro se desea:
 1.  **Cambiar el Color de Fondo o de Fuente:** Modificar los parámetros `boxcolor` (RGBA) y `fill` (RGBA) dentro de `aplicar_firma_a_slide()` en `automatizador.py`.
 2.  **Añadir Bordes Redondeados:** Se puede sustituir `ImageDraw.Draw.text()` / `badge` por una caja con bordes redondeados usando `draw_badge.rounded_rectangle()` de Pillow.
 3.  **Sincronizar en la Nube:** Al modificar este proyecto localmente, siempre realizar un `commit` y un `push` al origen remoto de GitHub (`https://github.com/otrabad/automatizador-videos-clases`) para que Streamlit Community Cloud actualice la versión en vivo. Asegurar que los archivos `app.py`, `automatizador.py` y `Arial.ttf` se suban juntos.
+

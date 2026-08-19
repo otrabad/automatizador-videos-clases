@@ -120,18 +120,60 @@ def aplicar_firma_a_slide(imagen_path, texto_firma="Dr. Omar Trabadelo", posicio
     except Exception as e:
         print(f"    [!] Error al estampar firma en diapositiva: {e}")
 
-def extraer_diapositivas_pdf(pdf_path, firma_docente=None, posicion_firma="derecha", font_size=36, padding=30):
-    """Convierte las paginas de un PDF en imagenes PNG individuales."""
-    print(f"[*] Abriendo presentacion PDF: {pdf_path}")
+def buscar_ejecutable_libreoffice():
+    """Busca el ejecutable de LibreOffice/soffice en el sistema o servidor."""
+    rutas_posibles = ["libreoffice", "soffice", "/Applications/LibreOffice.app/Contents/MacOS/soffice"]
+    for ruta in rutas_posibles:
+        if shutil.which(ruta) or os.path.exists(ruta):
+            return ruta
+    return None
+
+def convertir_pptx_a_pdf(pptx_path, temp_dir):
+    """Convierte un archivo PPTX o PPT a PDF usando LibreOffice en modo headless."""
+    exe = buscar_ejecutable_libreoffice()
+    if not exe:
+        raise RuntimeError(
+            "No se encontró LibreOffice (soffice) en el sistema para convertir PPTX a PDF. "
+            "En macOS podés instalarlo con 'brew install --cask libreoffice' o guardar tu presentación como PDF desde PowerPoint (Archivo > Guardar como > PDF)."
+        )
+    print(f"[*] Convirtiendo {pptx_path} a PDF usando {exe}...")
+    import subprocess
+    result = subprocess.run(
+        [exe, "--headless", "--convert-to", "pdf", pptx_path, "--outdir", temp_dir],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Error al convertir PPTX a PDF con LibreOffice: {result.stderr}")
+
+    base_name = os.path.splitext(os.path.basename(pptx_path))[0]
+    pdf_out = os.path.join(temp_dir, f"{base_name}.pdf")
+    if not os.path.exists(pdf_out):
+        pdfs = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".pdf")]
+        if pdfs:
+            return pdfs[0]
+        raise RuntimeError("No se generó el archivo PDF después de la conversión de PPTX.")
+    return pdf_out
+
+def extraer_diapositivas_pdf(pdf_path, firma_docente=None, posicion_firma="derecha", font_size=36, padding=30, temp_dir=TEMP_DIR):
+    """Convierte las paginas de un PDF (o PPTX auto-convertido) en imagenes PNG individuales."""
+    print(f"[*] Abriendo presentacion: {pdf_path}")
+
+    # Si es un archivo PowerPoint (.pptx / .ppt), convertirlo primero a PDF
+    if pdf_path.lower().endswith(('.pptx', '.ppt')):
+        pdf_path = convertir_pptx_a_pdf(pdf_path, temp_dir)
+
     if not os.path.exists(pdf_path):
         print(f"[!] Error: No se encontro el archivo PDF en {pdf_path}")
         sys.exit(1)
     doc = fitz.open(pdf_path)
     total_paginas = len(doc)
     print(f"[*] Se detectaron {total_paginas} paginas. Convirtiendo a imagenes...")
+    os.makedirs(temp_dir, exist_ok=True)
     for i, pagina in enumerate(doc):
         pix = pagina.get_pixmap(dpi=150)
-        imagen_path = os.path.join(TEMP_DIR, f"slide_{i+1:03d}.png")
+        imagen_path = os.path.join(temp_dir, f"slide_{i+1:03d}.png")
         pix.save(imagen_path)
         if firma_docente:
             aplicar_firma_a_slide(imagen_path, firma_docente, posicion_firma, font_size, padding)
@@ -153,6 +195,10 @@ def procesar_guion_texto(guion_path, total_paginas):
         sys.exit(1)
     with open(guion_path, "r", encoding="utf-8") as f:
         lineas = f.readlines()
+    return procesar_guion_desde_lineas(lineas, total_paginas)
+
+def procesar_guion_desde_lineas(lineas, total_paginas):
+    """Parsea las lineas de un guion y retorna un diccionario {num_slide: texto}."""
     guion_por_slide = {}
     slide_actual = None
     texto_acumulado = []
@@ -247,30 +293,59 @@ def imprimir_reporte_validacion(reporte):
 # Paso 4: Optimizacion con Gemini
 # ---------------------------------------------------------------------------
 
-def optimizar_texto_con_gemini(texto, model_name):
-    """Utiliza Gemini para corregir fonetica, abreviaturas y disonancias en el guion."""
+def optimizar_texto_con_gemini(texto, model_name, estilo="Médico / Académico Formal", reintentos=3):
+    """Utiliza Gemini para corregir fonetica, abreviaturas y disonancias en el guion con retry logic."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("[!] Advertencia: GEMINI_API_KEY no configurada. Saltando optimizacion fonetica.")
         return texto
-    try:
-        client = genai.Client()
-        prompt = (
-            "Eres un experto en locucion y redaccion academica. Tu tarea es optimizar el siguiente texto "
-            "para que sea leido por un sistema de sintesis de voz (TTS) de forma fluida y natural.\n\n"
+
+    prompts_estilo = {
+        "Médico / Académico Formal": (
+            "Eres un experto en locucion y redaccion academica-medica. Tu tarea es optimizar el siguiente texto "
+            "para que sea leido por un sistema de sintesis de voz (TTS) de forma fluida, rigurosa y natural.\n"
             "REGLAS:\n"
             "1. Expande abreviaturas, siglas medicas, simbolos o expresiones cientificas a su pronunciacion hablada en espanol.\n"
             "   Ejemplos: 'ABO/Rh' -> 'A B O y R H', 'pH' -> 'pe hache', 'mg/dl' -> 'miligramos por decilitro',\n"
             "   'vs.' -> 'versus', '/' -> 'y' o 'barra', '&' -> 'y', '1/2' -> 'un medio'.\n"
-            "2. Mantene el tono academico e instructivo original.\n"
-            "3. Devuelve UNICAMENTE el texto optimizado, sin comentarios ni preambulos.\n\n"
-            f"Texto:\n{texto}"
+            "2. Manten el tono academico e instructivo original.\n"
+            "3. Devuelve UNICAMENTE el texto optimizado, sin comentarios ni preambulos.\n"
+        ),
+        "Didáctico / Divulgativo": (
+            "Eres un experto en pedagogia y locucion. Adapta el siguiente texto para una voz sintetica TTS "
+            "de forma clara, dinamica y accesible para estudiantes.\n"
+            "REGLAS:\n"
+            "1. Clarifica oraciones complejas y expande abreviaturas a sus terminos completos.\n"
+            "2. Manten un tono divulgativo, fluido y facil de seguir.\n"
+            "3. Devuelve UNICAMENTE el texto optimizado, sin comentarios ni preambulos.\n"
+        ),
+        "Conciso / Breve": (
+            "Eres un editor de guiones para video-clases. Sintetiza y optimiza el siguiente texto "
+            "para una locucion fluida y directa al punto.\n"
+            "REGLAS:\n"
+            "1. Remueve redundancias manteniendo los conceptos clave y expandiendo abreviaturas.\n"
+            "2. Devuelve UNICAMENTE el texto optimizado, sin comentarios ni preambulos.\n"
         )
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"[!] Error al invocar Gemini: {e}. Se usara el texto original.")
-        return texto
+    }
+
+    prompt_base = prompts_estilo.get(estilo, prompts_estilo["Médico / Académico Formal"])
+    prompt = f"{prompt_base}\nTexto:\n{texto}"
+
+    for intento in range(1, reintentos + 1):
+        try:
+            client = genai.Client()
+            response = client.models.generate_content(model=model_name, contents=prompt)
+            if response and response.text:
+                return response.text.strip()
+        except Exception as e:
+            if intento < reintentos:
+                print(f"    [!] Error en Gemini (intento {intento}/{reintentos}): {e}. Reintentando...")
+                import time
+                time.sleep(2 * intento)
+            else:
+                print(f"[!] Error definitivo al invocar Gemini: {e}. Se usara el texto original.")
+                return texto
+    return texto
 
 # ---------------------------------------------------------------------------
 # Paso 5: Generacion de audio (silencio real + reintento en TTS)
@@ -299,11 +374,11 @@ def _generar_wav_silencio(output_path, duracion_s=2.0, sample_rate=24000):
         f.write(struct.pack("<I", num_bytes))
         f.write(b"\x00" * num_bytes)
 
-async def _intentar_generar_audio(texto, voz, output_path, reintentos=3):
+async def _intentar_generar_audio(texto, voz, output_path, rate="+0%", reintentos=3):
     """Llama a edge-tts con hasta `reintentos` intentos ante fallos de red o TTS."""
     for intento in range(1, reintentos + 1):
         try:
-            communicate = edge_tts.Communicate(texto, voz)
+            communicate = edge_tts.Communicate(texto, voz, rate=rate)
             await communicate.save(output_path)
             return
         except Exception as e:
@@ -315,7 +390,10 @@ async def _intentar_generar_audio(texto, voz, output_path, reintentos=3):
                     f"edge-tts no pudo generar audio tras {reintentos} intentos. Ultimo error: {e}"
                 )
 
-async def generar_todos_los_audios(guion_por_slide, voz, optimizar_ia, modelo_gemini, total_paginas):
+async def generar_todos_los_audios(
+    guion_por_slide, voz, optimizar_ia, modelo_gemini, total_paginas,
+    rate="+0%", estilo_gemini="Médico / Académico Formal", temp_dir=TEMP_DIR
+):
     """
     Genera audio para cada slide del PDF (1..total_paginas):
     - Con texto: edge-tts con reintento automatico.
@@ -329,23 +407,23 @@ async def generar_todos_los_audios(guion_por_slide, voz, optimizar_ia, modelo_ge
         texto = guion_por_slide.get(num_slide, "").strip()
 
         if not texto:
-            wav_silencio = os.path.join(TEMP_DIR, f"audio_{num_slide:03d}.wav")
+            wav_silencio = os.path.join(temp_dir, f"audio_{num_slide:03d}.wav")
             _generar_wav_silencio(wav_silencio)
             print(f"    -> Diapositiva {num_slide}: silencio generado (2 s)")
             continue
 
         texto_procesado = texto
         if optimizar_ia:
-            print(f"    -> Optimizando texto de diapositiva {num_slide} con Gemini...")
-            texto_procesado = optimizar_texto_con_gemini(texto, modelo_gemini)
+            print(f"    -> Optimizando texto de diapositiva {num_slide} con Gemini ({estilo_gemini})...")
+            texto_procesado = optimizar_texto_con_gemini(texto, modelo_gemini, estilo=estilo_gemini)
 
-        output_audio = os.path.join(TEMP_DIR, f"audio_{num_slide:03d}.mp3")
+        output_audio = os.path.join(temp_dir, f"audio_{num_slide:03d}.mp3")
         try:
-            await _intentar_generar_audio(texto_procesado, voz, output_audio)
-            print(f"    -> Diapositiva {num_slide}: audio TTS generado")
+            await _intentar_generar_audio(texto_procesado, voz, output_audio, rate=rate)
+            print(f"    -> Diapositiva {num_slide}: audio TTS generado (ritmo: {rate})")
         except RuntimeError as e:
             print(f"    [!] ERROR definitivo en diapositiva {num_slide}: {e}")
-            wav_fallback = os.path.join(TEMP_DIR, f"audio_{num_slide:03d}.wav")
+            wav_fallback = os.path.join(temp_dir, f"audio_{num_slide:03d}.wav")
             _generar_wav_silencio(wav_fallback, duracion_s=3.0)
             errores.append(num_slide)
             print(f"    [!] Diapositiva {num_slide}: usando silencio de respaldo.")
@@ -357,16 +435,16 @@ async def generar_todos_los_audios(guion_por_slide, voz, optimizar_ia, modelo_ge
 # Paso 6: Ensamblado del video final
 # ---------------------------------------------------------------------------
 
-def ensamblar_video_final(total_slides, video_salida):
+def ensamblar_video_final(total_slides, video_salida, pausa_inter_slide=0.0, temp_dir=TEMP_DIR):
     """Une las imagenes con sus audios y genera el MP4 final."""
     print("[*] Iniciando ensamblado de video con MoviePy...")
     video_clips = []
     audio_clips = []
 
     for i in range(1, total_slides + 1):
-        imagen_path    = os.path.join(TEMP_DIR, f"slide_{i:03d}.png")
-        audio_path_mp3 = os.path.join(TEMP_DIR, f"audio_{i:03d}.mp3")
-        audio_path_wav = os.path.join(TEMP_DIR, f"audio_{i:03d}.wav")
+        imagen_path    = os.path.join(temp_dir, f"slide_{i:03d}.png")
+        audio_path_mp3 = os.path.join(temp_dir, f"audio_{i:03d}.mp3")
+        audio_path_wav = os.path.join(temp_dir, f"audio_{i:03d}.wav")
         audio_path     = audio_path_mp3 if os.path.exists(audio_path_mp3) else \
                          audio_path_wav  if os.path.exists(audio_path_wav) else None
 
@@ -377,12 +455,13 @@ def ensamblar_video_final(total_slides, video_salida):
         if audio_path:
             print(f"    -> Procesando Diapositiva {i}/{total_slides} (con audio)")
             audio_clip = AudioFileClip(audio_path)
-            video_clip = ImageClip(imagen_path).with_duration(audio_clip.duration)
+            duracion_clip = audio_clip.duration + pausa_inter_slide
+            video_clip = ImageClip(imagen_path).with_duration(duracion_clip)
             video_clips.append(video_clip)
             audio_clips.append(audio_clip)
         else:
             print(f"    -> Procesando Diapositiva {i}/{total_slides} (sin audio - 2 s)")
-            video_clips.append(ImageClip(imagen_path).with_duration(2.0))
+            video_clips.append(ImageClip(imagen_path).with_duration(2.0 + pausa_inter_slide))
 
     print("[*] Concatenando diapositivas...")
     video_final = concatenate_videoclips(video_clips, method="chain")
@@ -393,13 +472,14 @@ def ensamblar_video_final(total_slides, video_salida):
         video_final = video_final.with_audio(audio_final)
 
     print("[*] Renderizando MP4 final...")
+    temp_audio_file = os.path.join(temp_dir, "temp_audio_final.m4a")
     video_final.write_videofile(
         video_salida,
         fps=2,
         codec="libx264",
         preset="ultrafast",
         audio_codec="aac",
-        temp_audiofile=os.path.join(TEMP_DIR, "temp_audio_final.m4a"),
+        temp_audiofile=temp_audio_file,
         remove_temp=True
     )
 
@@ -422,7 +502,10 @@ def ejecutar_proceso_automatizacion(
     optimizar_ia, modelo_gemini="gemini-2.5-flash",
     api_key=None, callback_progreso=None,
     firma_docente=None, posicion_firma="derecha",
-    font_size=36, padding=30
+    font_size=36, padding=30,
+    rate="+0%", pausa_inter_slide=0.0,
+    estilo_gemini="Médico / Académico Formal",
+    temp_dir=None, contenido_guion_texto=None
 ):
     """
     Ejecuta el flujo completo de automatizacion de video.
@@ -431,30 +514,39 @@ def ejecutar_proceso_automatizacion(
     if api_key:
         os.environ["GEMINI_API_KEY"] = api_key
 
-    limpiar_carpeta_temporal()
+    # Si no se provee un temp_dir aislado, usar una carpeta dentro del directorio
+    target_temp_dir = temp_dir or TEMP_DIR
+    os.makedirs(target_temp_dir, exist_ok=True)
 
     if callback_progreso:
         callback_progreso("Extrayendo diapositivas del PDF...", 0.05)
-    total_paginas = extraer_diapositivas_pdf(pdf_path, firma_docente, posicion_firma, font_size, padding)
+    total_paginas = extraer_diapositivas_pdf(
+        pdf_path, firma_docente, posicion_firma, font_size, padding, temp_dir=target_temp_dir
+    )
 
     if callback_progreso:
         callback_progreso("Procesando guion de voz...", 0.20)
-    guion_por_slide = procesar_guion_texto(guion_path, total_paginas)
+
+    if contenido_guion_texto:
+        lineas = contenido_guion_texto.splitlines()
+        guion_por_slide = procesar_guion_desde_lineas(lineas, total_paginas)
+    else:
+        guion_por_slide = procesar_guion_texto(guion_path, total_paginas)
 
     reporte = validar_coincidencia(total_paginas, guion_por_slide)
 
     if callback_progreso:
         callback_progreso("Generando locuciones con voz neural...", 0.40)
     run_async(generar_todos_los_audios(
-        guion_por_slide, voz, optimizar_ia, modelo_gemini, total_paginas
+        guion_por_slide, voz, optimizar_ia, modelo_gemini, total_paginas,
+        rate=rate, estilo_gemini=estilo_gemini, temp_dir=target_temp_dir
     ))
 
     if callback_progreso:
         callback_progreso("Sincronizando y renderizando video final...", 0.80)
-    ensamblar_video_final(total_paginas, video_salida)
-
-    if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
+    ensamblar_video_final(
+        total_paginas, video_salida, pausa_inter_slide=pausa_inter_slide, temp_dir=target_temp_dir
+    )
 
     if callback_progreso:
         callback_progreso("Video finalizado con exito!", 1.0)
