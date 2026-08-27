@@ -6,6 +6,7 @@ temp_assets/
 *.pdf
 *.txt
 !requirements.txt
+!packages.txt
 config.json
 crear_pdf_prueba.py
 __pycache__/
