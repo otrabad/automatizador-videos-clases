@@ -355,6 +355,17 @@ if tiene_huerfanas:
     st.error(
         "No es posible generar el video: corregí las locuciones huérfanas en el guión antes de continuar."
     )
+elif not archivos_ok:
+    if slide_file is not None and pdf_file is None:
+        st.error(
+            "⚠️ El botón de generar está deshabilitado porque no se pudo preparar un PDF a partir del archivo de "
+            "diapositivas subido (revisá el aviso más arriba sobre la conversión de PowerPoint). Exportá tu "
+            "presentación como PDF y subila para continuar."
+        )
+    elif slide_file is None:
+        st.info("Subí tus diapositivas (PDF o PowerPoint) para habilitar la generación.")
+    elif txt_file is None:
+        st.info("Subí el guion de voz (TXT) para habilitar la generación.")
 
 boton_deshabilitado = not archivos_ok or tiene_huerfanas
 
