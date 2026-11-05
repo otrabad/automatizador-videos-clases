@@ -374,12 +374,29 @@ def _generar_wav_silencio(output_path, duracion_s=2.0, sample_rate=24000):
         f.write(struct.pack("<I", num_bytes))
         f.write(b"\x00" * num_bytes)
 
+def _validar_mp3(path):
+    """
+    Comprueba que el archivo generado por edge-tts sea realmente un MP3.
+    Si el servicio de voz responde con datos invalidos (vacio, texto de error,
+    bloqueo de IP en la nube), el archivo existe pero ffmpeg no puede leerlo y
+    el video falla al final. Lanzar el error aca permite reintentar y avisar
+    en la diapositiva correcta.
+    """
+    if not os.path.exists(path) or os.path.getsize(path) < 1024:
+        raise RuntimeError("edge-tts devolvio un audio vacio o demasiado corto.")
+    with open(path, "rb") as f:
+        cab = f.read(3)
+    es_mp3 = cab == b"ID3" or (len(cab) >= 2 and cab[0] == 0xFF and (cab[1] & 0xE0) == 0xE0)
+    if not es_mp3:
+        raise RuntimeError("edge-tts devolvio datos que no son un MP3 valido.")
+
 async def _intentar_generar_audio(texto, voz, output_path, rate="+0%", reintentos=3):
     """Llama a edge-tts con hasta `reintentos` intentos ante fallos de red o TTS."""
     for intento in range(1, reintentos + 1):
         try:
             communicate = edge_tts.Communicate(texto, voz, rate=rate)
             await communicate.save(output_path)
+            _validar_mp3(output_path)
             return
         except Exception as e:
             if intento < reintentos:

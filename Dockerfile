@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     streamlit==1.50.0 \
     pymupdf==1.26.5 \
-    edge-tts==7.2.8 \
+    edge-tts==7.3.1 \
     moviepy==2.2.1 \
     google-genai==1.47.0
 
