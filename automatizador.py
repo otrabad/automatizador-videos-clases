@@ -440,6 +440,12 @@ async def generar_todos_los_audios(
             print(f"    -> Diapositiva {num_slide}: audio TTS generado (ritmo: {rate})")
         except RuntimeError as e:
             print(f"    [!] ERROR definitivo en diapositiva {num_slide}: {e}")
+            # edge-tts puede dejar un archivo parcial o vacio: si queda, el ensamblado
+            # lo prefiere al silencio de respaldo y el video falla al final.
+            for ext_res in ("mp3", "wav"):
+                resto = os.path.join(temp_dir, f"audio_{num_slide:03d}.{ext_res}")
+                if os.path.exists(resto):
+                    os.remove(resto)
             wav_fallback = os.path.join(temp_dir, f"audio_{num_slide:03d}.wav")
             _generar_wav_silencio(wav_fallback, duracion_s=3.0)
             errores.append(num_slide)
@@ -447,6 +453,7 @@ async def generar_todos_los_audios(
 
     if errores:
         print(f"\n[!] ADVERTENCIA: {len(errores)} diapositiva(s) usaron silencio por fallo de TTS: {errores}")
+    return errores
 
 # ---------------------------------------------------------------------------
 # Paso 6: Ensamblado del video final
@@ -564,7 +571,7 @@ def ejecutar_proceso_automatizacion(
 
     if callback_progreso:
         callback_progreso("Generando locuciones con voz neural...", 0.40)
-    run_async(generar_todos_los_audios(
+    slides_audio_fallido = run_async(generar_todos_los_audios(
         guion_por_slide, voz, optimizar_ia, modelo_gemini, total_paginas,
         rate=rate, estilo_gemini=estilo_gemini, temp_dir=target_temp_dir
     ))
@@ -578,6 +585,7 @@ def ejecutar_proceso_automatizacion(
     if callback_progreso:
         callback_progreso("Video finalizado con exito!", 1.0)
 
+    reporte["slides_audio_fallido"] = slides_audio_fallido or []
     return reporte
 
 # ---------------------------------------------------------------------------

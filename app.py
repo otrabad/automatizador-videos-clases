@@ -416,6 +416,12 @@ if st.button("🎬 Generar Video MP4 de la Clase", disabled=boton_deshabilitado)
 
             st.success("🎉 Video compilado con éxito!")
 
+            if reporte_final and reporte_final.get("slides_audio_fallido"):
+                st.error(
+                    f"🔇 No se pudo generar la voz de los slides {reporte_final['slides_audio_fallido']}: "
+                    "quedaron en silencio. Probá de nuevo o cambiá la voz."
+                )
+
             if reporte_final and reporte_final["slides_sin_voz"]:
                 st.warning(
                     f"⚠️ Los slides {reporte_final['slides_sin_voz']} quedaron en silencio "
@@ -433,8 +439,15 @@ if st.button("🎬 Generar Video MP4 de la Clase", disabled=boton_deshabilitado)
             )
 
         except Exception as e:
-            st.error(f"❌ Error inesperado: {e}")
-            st.info(
-                "Consejo: verificá que las marcas del guión comiencen exactamente con 'Diapositiva X' "
-                "y que la numeración coincida con las páginas del PDF."
-            )
+            st.error(f"❌ Error al generar el video: {e}")
+            msg = str(e).lower()
+            if any(p in msg for p in ("guion", "guión", "diapositiva", "locuci", "slide")):
+                st.info(
+                    "Consejo: verificá que las marcas del guión comiencen exactamente con 'Diapositiva X' "
+                    "y que la numeración coincida con las páginas del PDF."
+                )
+            elif "mp3" in msg or "ffmpeg" in msg or "audio" in msg:
+                st.info(
+                    "Consejo: falló el audio de la voz. Suele ser un problema pasajero del servicio de voz: "
+                    "esperá un momento y volvé a generar el video."
+                )

@@ -9,6 +9,8 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     build-essential \
+    libreoffice-impress \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Establecer directorio de trabajo en el contenedor
@@ -26,6 +28,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copiar los archivos del script y de la interfaz al contenedor
 COPY app.py /app/app.py
 COPY automatizador.py /app/automatizador.py
+COPY Arial.ttf /app/Arial.ttf
 
 # Exponer el puerto que Cloud Run utiliza por defecto (8080)
 EXPOSE 8080
