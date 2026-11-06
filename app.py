@@ -252,7 +252,7 @@ with col_voz:
             "Rápido (+10%)": "+10%",
             "Muy rápido (+20%)": "+20%"
         }
-        ritmo_label = st.selectbox("Ritmo de locución:", options=list(opciones_ritmo.keys()), index=1)
+        ritmo_label = st.selectbox("Ritmo de locución:", options=list(opciones_ritmo.keys()), index=0)
         rate_val = opciones_ritmo[ritmo_label]
     with sub_voz2:
         opciones_pausa = {

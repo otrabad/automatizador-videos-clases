@@ -8,7 +8,7 @@ import struct
 import fitz  # PyMuPDF
 import edge_tts
 from google import genai
-from moviepy import ImageClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
+from moviepy import ImageClip, AudioFileClip, CompositeAudioClip, concatenate_videoclips
 
 # Directorio del script y carpeta temporal para guardar archivos intermedios
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -452,11 +452,17 @@ async def generar_todos_los_audios(
 # Paso 6: Ensamblado del video final
 # ---------------------------------------------------------------------------
 
+# Segundos que la diapositiva se ve en pantalla antes de que empiece la locucion.
+# Debe ser >= 1/fps (el video se renderiza a 2 fps, o sea 0.5 s por cuadro) para que
+# la voz nunca arranque antes de que aparezca la diapositiva.
+INICIO_LOCUCION_S = 0.6
+
 def ensamblar_video_final(total_slides, video_salida, pausa_inter_slide=0.0, temp_dir=TEMP_DIR):
     """Une las imagenes con sus audios y genera el MP4 final."""
     print("[*] Iniciando ensamblado de video con MoviePy...")
     video_clips = []
     audio_clips = []
+    t_acumulado = 0.0
 
     for i in range(1, total_slides + 1):
         imagen_path    = os.path.join(temp_dir, f"slide_{i:03d}.png")
@@ -472,20 +478,24 @@ def ensamblar_video_final(total_slides, video_salida, pausa_inter_slide=0.0, tem
         if audio_path:
             print(f"    -> Procesando Diapositiva {i}/{total_slides} (con audio)")
             audio_clip = AudioFileClip(audio_path)
-            duracion_clip = audio_clip.duration + pausa_inter_slide
+            duracion_clip = INICIO_LOCUCION_S + audio_clip.duration + pausa_inter_slide
             video_clip = ImageClip(imagen_path).with_duration(duracion_clip)
             video_clips.append(video_clip)
-            audio_clips.append(audio_clip)
+            # La voz se ubica por tiempo absoluto: asi la pausa y el retardo inicial
+            # no desplazan el audio respecto de la diapositiva (antes se acumulaba).
+            audio_clips.append(audio_clip.with_start(t_acumulado + INICIO_LOCUCION_S))
         else:
             print(f"    -> Procesando Diapositiva {i}/{total_slides} (sin audio - 2 s)")
-            video_clips.append(ImageClip(imagen_path).with_duration(2.0 + pausa_inter_slide))
+            duracion_clip = 2.0 + pausa_inter_slide
+            video_clips.append(ImageClip(imagen_path).with_duration(duracion_clip))
+        t_acumulado += duracion_clip
 
     print("[*] Concatenando diapositivas...")
     video_final = concatenate_videoclips(video_clips, method="chain")
 
     if audio_clips:
         print("[*] Concatenando pista de audio...")
-        audio_final = concatenate_audioclips(audio_clips)
+        audio_final = CompositeAudioClip(audio_clips).with_duration(t_acumulado)
         video_final = video_final.with_audio(audio_final)
 
     print("[*] Renderizando MP4 final...")
